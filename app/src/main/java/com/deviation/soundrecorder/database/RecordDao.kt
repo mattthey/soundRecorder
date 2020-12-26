@@ -7,27 +7,34 @@ import androidx.room.Query
 import androidx.room.Update
 
 @Dao
-interface RecordDao
-{
+interface RecordDao {
+    companion object {
+        const val GET_RECORD_BY_ID_SQL = "SELECT * from tbl_record WHERE id = :key"
+        const val DELETE_ALL_SQL = "DELETE FROM tbl_record"
+        const val DELETE_RECORD_BY_ID_SQL = "DELETE FROM tbl_record WHERE id = :key"
+        const val DELETE_RECORD_BY_IDS_SQL = "DELETE FROM tbl_record WHERE id in (:keys)"
+        const val GET_ALL_RECORDS_SQL = "SELECT * FROM tbl_record ORDER BY id DESC"
+    }
+
     @Insert
     fun insert(record: RecordEntity)
 
     @Update
     fun update(record: RecordEntity)
 
-    // TODO переделать на констатны или вынести в отдельный файл. На данном этапе и размере склоняюсь к константам
-    @Query("SELECT * from tbl_record WHERE id = :key")
+    @Query(GET_RECORD_BY_ID_SQL)
     fun getRecord(key: Long?): RecordEntity?
 
-    @Query("DELETE FROM tbl_record")
+    @Query(DELETE_ALL_SQL)
     fun clearAll()
 
-    @Query("DELETE FROM tbl_record WHERE id = :key")
+    // легче передать id, чем использовать аннотацию {@link androidx.room.Query.Delete}
+    @Query(DELETE_RECORD_BY_ID_SQL)
     fun removeRecord(key: Long?)
 
-    @Query("DELETE FROM tbl_record WHERE id in (:keys)")
+    @Query(DELETE_RECORD_BY_IDS_SQL)
     fun removeRecords(keys: List<Long>)
 
-    @Query("SELECT * FROM tbl_record ORDER BY id DESC")
+    @Query(GET_ALL_RECORDS_SQL)
     fun getAllRecords(): LiveData<MutableList<RecordEntity>>
 }
