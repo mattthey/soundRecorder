@@ -4,9 +4,9 @@ import android.app.ActivityManager
 import android.content.Context
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-import androidx.navigation.Navigation
-import androidx.navigation.ui.NavigationUI
-import kotlinx.android.synthetic.main.activity_main.*
+import androidx.navigation.fragment.NavHostFragment
+import androidx.navigation.ui.setupWithNavController
+import com.google.android.material.bottomnavigation.BottomNavigationView
 
 class MainActivity : AppCompatActivity() {
 
@@ -14,10 +14,10 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Меню переключения:
-        // Необходимо передать меню навигации и основной View
-        NavigationUI.setupWithNavController(bottom_navigation,
-        Navigation.findNavController(this, R.id.nav_host_fragment_container))
+        val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment_container) as NavHostFragment
+        val navController = navHostFragment.navController
+        findViewById<BottomNavigationView>(R.id.bottom_navigation)
+            .setupWithNavController(navController)
     }
 
     fun isServiceRunning(): Boolean {
