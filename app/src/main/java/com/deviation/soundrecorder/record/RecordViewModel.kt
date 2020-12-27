@@ -18,11 +18,9 @@ class RecordViewModel(private val app: Application) : AndroidViewModel(app) {
     private val TRIGGER_TIME = "TRIGGER_AT"
     private val second: Long = 1_000L
 
-    private var prefs =
-        app.getSharedPreferences("com.deviation.soundrecorder", Context.MODE_PRIVATE)
+    private var prefs = app.getSharedPreferences("com.deviation.soundrecorder", Context.MODE_PRIVATE)
 
     private val _elapsedTime = MutableLiveData<String>()
-
     val elapsedTime: LiveData<String>
         get() = _elapsedTime
 
@@ -75,12 +73,16 @@ class RecordViewModel(private val app: Application) : AndroidViewModel(app) {
 
     fun resetTimer() {
         _elapsedTime.value = timeFormatter(0)
-        viewModelScope.launch { saveTime(0) }
+        viewModelScope.launch {
+            saveTime(0)
+        }
     }
 
     private suspend fun saveTime(triggerTime: Long) =
         withContext(Dispatchers.IO) {
-            prefs.edit().putLong(TRIGGER_TIME, triggerTime).apply()
+            prefs.edit()
+                    .putLong(TRIGGER_TIME, triggerTime)
+                    .apply()
         }
 
     private suspend fun loadTime(): Long =

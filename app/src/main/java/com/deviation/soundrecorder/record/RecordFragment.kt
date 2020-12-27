@@ -23,9 +23,6 @@ import com.deviation.soundrecorder.databinding.FragmentRecordBinding
 import kotlinx.android.synthetic.main.fragment_record.*
 import java.io.File
 
-/**
- * A simple [Fragment] subclass.
- */
 class RecordFragment : Fragment() {
     private val PERMISSIONS_RECORD_AUDIO = 123
 
@@ -41,9 +38,12 @@ class RecordFragment : Fragment() {
         val binding = DataBindingUtil.inflate<FragmentRecordBinding>(
             inflater,
             R.layout.fragment_record,
-            container, false
+            container,
+            false
         )
-        database = context?.let { SoundRecorderDatabase.getInstance(it).recordDatabaseDao }
+        database = context?.let {
+            SoundRecorderDatabase.getInstance(it).recordDatabaseDao
+        }
         mainActivity = activity as MainActivity
 
         viewModel = ViewModelProvider(this).get(RecordViewModel::class.java)
@@ -51,37 +51,45 @@ class RecordFragment : Fragment() {
         binding.recordViewModel = viewModel
         binding.lifecycleOwner = viewLifecycleOwner
 
-        if (!mainActivity.isServiceRunning()) {
-            viewModel.resetTimer()
-        } else {
+        if (mainActivity.isServiceRunning()) {
             binding.playButton.setImageResource(R.drawable.ic_media_stop)
+        } else {
+            viewModel.resetTimer()
         }
 
         binding.playButton.setOnClickListener {
             if (ContextCompat.checkSelfPermission(
                     requireContext(),
-                    android.Manifest.permission.RECORD_AUDIO
-                ) != PERMISSION_GRANTED
-            ) {
+                    android.Manifest.permission.RECORD_AUDIO) != PERMISSION_GRANTED) {
                 requestPermissions(
                     arrayOf(android.Manifest.permission.RECORD_AUDIO), PERMISSIONS_RECORD_AUDIO
                 )
-            } else {
-                if (mainActivity.isServiceRunning()) {
-                    onRecord(false)
-                    viewModel.stopTimer()
-                } else {
-                    onRecord(true)
-                    viewModel.startTimer()
-                }
+
+                return@setOnClickListener
             }
+
+            if (mainActivity.isServiceRunning())
+                stopRecord()
+            else
+                startRecord()
         }
 
         createChannel(
             getString(R.string.notification_channel_id),
             getString(R.string.notification_channel_name)
         )
+
         return binding.root
+    }
+
+    private fun startRecord() {
+        onRecord(true)
+        viewModel.startTimer()
+    }
+
+    private fun stopRecord() {
+        onRecord(false)
+        viewModel.stopTimer()
     }
 
     private fun onRecord(start: Boolean) {
@@ -116,15 +124,15 @@ class RecordFragment : Fragment() {
         when (requestCode) {
             PERMISSIONS_RECORD_AUDIO -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == PERMISSION_GRANTED) {
-                    onRecord(true)
-                    viewModel.startTimer()
+                    startRecord()
                 } else {
                     Toast.makeText(
-                        activity,
-                        getString(R.string.toast_recording_permissions),
-                        LENGTH_SHORT
-                    ).show()
+                            activity,
+                            getString(R.string.toast_recording_permissions),
+                            LENGTH_SHORT)
+                            .show()
                 }
+
                 return
             }
         }
