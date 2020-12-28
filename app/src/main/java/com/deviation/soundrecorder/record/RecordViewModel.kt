@@ -1,36 +1,43 @@
 package com.deviation.soundrecorder.record
 
-import android.app.Application
-import android.content.Context
+import android.content.ComponentName
+import android.content.ServiceConnection
 import android.os.CountDownTimer
+import android.os.IBinder
 import android.os.SystemClock
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
+import androidx.lifecycle.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
-class RecordViewModel(private val app: Application) : AndroidViewModel(app) {
+class RecordViewModel : ViewModel() {
 
-    private val TRIGGER_TIME = "TRIGGER_AT"
-    private val second: Long = 1_000L
+    private val SECOND: Long = 1_000L
 
-    private var prefs = app.getSharedPreferences("com.deviation.soundrecorder", Context.MODE_PRIVATE)
-
-    private val _elapsedTime = MutableLiveData<String>()
-    val elapsedTime: LiveData<String>
-        get() = _elapsedTime
+    private val _elapsedTime = MutableLiveData<Long>()
+    val elapsedTimeString: LiveData<String> = Transformations.map(_elapsedTime) { time ->
+        timeFormatter(time)
+    }
 
     private lateinit var timer: CountDownTimer
 
-    init {
-        createTimer()
+    var isBounded = false
+    var isPaused = false
+
+    lateinit var recordService: RecordService
+
+    val connection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val binder = service as RecordService.LocalBinder
+            recordService = binder.getService()
+            isBounded = true
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            isBounded = false
+        }
     }
 
-    fun timeFormatter(time: Long): String {
+    private fun timeFormatter(time: Long): String {
         return String.format(
             "%02d:%02d:%02d",
             TimeUnit.MILLISECONDS.toHours(time) % 60,
@@ -40,54 +47,43 @@ class RecordViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     fun stopTimer() {
-        if (this::timer.isInitialized) {
+        if (this::timer.isInitialized)
             timer.cancel()
-        }
+
         resetTimer()
     }
 
     fun startTimer() {
-        val triggerTime = SystemClock.elapsedRealtime()
-
         viewModelScope.launch {
-            saveTime(triggerTime)
-            createTimer()
+            timer = countDownTimer(SystemClock.elapsedRealtime())
+            timer.start()
         }
     }
 
-    private fun createTimer() {
-        viewModelScope.launch {
-            val triggerTime = loadTime()
-            timer = object : CountDownTimer(triggerTime, second) {
-                override fun onTick(millisUntilFinished: Long) {
-                    _elapsedTime.value = timeFormatter(SystemClock.elapsedRealtime() - triggerTime)
-                }
+    fun pauseTimer() {
+        timer.cancel()
+    }
 
-                override fun onFinish() {
-                    resetTimer()
-                }
-            }
+    fun resumeTimer() {
+        viewModelScope.launch {
+            timer = countDownTimer(SystemClock.elapsedRealtime() - (_elapsedTime.value ?: 0))
             timer.start()
         }
     }
 
     fun resetTimer() {
-        _elapsedTime.value = timeFormatter(0)
-        viewModelScope.launch {
-            saveTime(0)
-        }
+        _elapsedTime.value = 0
     }
 
-    private suspend fun saveTime(triggerTime: Long) =
-        withContext(Dispatchers.IO) {
-            prefs.edit()
-                    .putLong(TRIGGER_TIME, triggerTime)
-                    .apply()
-        }
+    private fun countDownTimer(triggerTime: Long):CountDownTimer{
+        return object: CountDownTimer(triggerTime, SECOND){
+            override fun onTick(millisUntilFinished: Long){
+                _elapsedTime.value = SystemClock.elapsedRealtime() - triggerTime
+            }
 
-    private suspend fun loadTime(): Long =
-        withContext(Dispatchers.IO) {
-            prefs.getLong(TRIGGER_TIME, 0)
+            override fun onFinish() {
+                resetTimer()
+            }
         }
-
+    }
 }

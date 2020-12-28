@@ -2,6 +2,7 @@ package com.deviation.soundrecorder.record
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager.PERMISSION_GRANTED
 import android.os.Bundle
@@ -20,11 +21,14 @@ import com.deviation.soundrecorder.R
 import com.deviation.soundrecorder.database.RecordDao
 import com.deviation.soundrecorder.database.SoundRecorderDatabase
 import com.deviation.soundrecorder.databinding.FragmentRecordBinding
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.android.synthetic.main.fragment_record.*
 import java.io.File
 
 class RecordFragment : Fragment() {
     private val PERMISSIONS_RECORD_AUDIO = 123
+
+    private val recordsFolder = activity?.getExternalFilesDir(null)?.absolutePath.toString() + "/SoundRecorder"
 
     private lateinit var viewModel: RecordViewModel
     private lateinit var mainActivity: MainActivity
@@ -46,13 +50,17 @@ class RecordFragment : Fragment() {
         }
         mainActivity = activity as MainActivity
 
-        viewModel = ViewModelProvider(this).get(RecordViewModel::class.java)
+        viewModel = ViewModelProvider(requireActivity()).get(RecordViewModel::class.java)
 
         binding.recordViewModel = viewModel
         binding.lifecycleOwner = viewLifecycleOwner
 
-        if (mainActivity.isServiceRunning()) {
-            binding.playButton.setImageResource(R.drawable.ic_media_stop)
+        if (viewModel.isBounded) {
+            when (viewModel.isPaused) {
+                true -> binding.playButton.setImageResource(R.drawable.ic_media_play)
+                false -> binding.playButton.setImageResource(R.drawable.ic_media_pause)
+            }
+            binding.stopButton.visibility = View.VISIBLE
         } else {
             viewModel.resetTimer()
         }
@@ -68,10 +76,20 @@ class RecordFragment : Fragment() {
                 return@setOnClickListener
             }
 
-            if (mainActivity.isServiceRunning())
-                stopRecord()
-            else
+            if (viewModel.isBounded) {
+                when (viewModel.isPaused) {
+                    true -> resumeRecord()
+                    false -> pauseRecord()
+                }
+            }
+            else {
                 startRecord()
+            }
+        }
+
+        binding.stopButton.setOnClickListener {
+            if (viewModel.isBounded)
+                stopRecord()
         }
 
         createChannel(
@@ -85,33 +103,55 @@ class RecordFragment : Fragment() {
     private fun startRecord() {
         onRecord(true)
         viewModel.startTimer()
+        stopButton.visibility = View.VISIBLE
     }
 
     private fun stopRecord() {
         onRecord(false)
         viewModel.stopTimer()
+        stopButton.visibility = View.GONE
+    }
+
+    private fun pauseRecord() {
+        if (viewModel.isBounded) {
+            playButton.setImageResource(R.drawable.ic_media_play)
+            viewModel.isPaused = true
+            viewModel.pauseTimer()
+            viewModel.recordService.pauseRecording()
+        }
+    }
+
+    private fun resumeRecord() {
+        if (viewModel.isBounded) {
+            playButton.setImageResource(R.drawable.ic_media_pause)
+            viewModel.isPaused = false
+            viewModel.resumeTimer()
+            viewModel.recordService.resumeRecording()
+        }
     }
 
     private fun onRecord(start: Boolean) {
-        val intent = Intent(activity, RecordService::class.java)
-
         if (start) {
-            playButton.setImageResource(R.drawable.ic_media_stop)
+            playButton.setImageResource(R.drawable.ic_media_pause)
             Toast.makeText(activity, R.string.toast_recording_start, LENGTH_SHORT).show()
 
-            // TODO В константы
-            val folder =
-                File(activity?.getExternalFilesDir(null)?.absolutePath.toString() + "/SoundRecorder")
-            if (!folder.exists()) {
+            val folder = File(recordsFolder)
+            if (!folder.exists())
                 folder.mkdir()
+
+            Intent(activity, RecordService::class.java).also { intent ->
+                activity?.bindService(intent, viewModel.connection, Context.BIND_AUTO_CREATE)
             }
 
-            activity?.startService(intent)
             activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         } else {
             playButton.setImageResource(R.drawable.ic_mic_white_36dp)
 
-            activity?.stopService(intent)
+            if (viewModel.isBounded) {
+                activity?.unbindService(viewModel.connection)
+                viewModel.isBounded = false
+            }
+
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
